@@ -1,0 +1,1234 @@
+---
+title: "R projet Monte-Carlo Method: Sacha ASSOULY, Samuel ELBAZ, Alexandre ZENOU"
+date: "2024-12-22"
+output: pdf_document
+---
+
+```{r}
+#Question 3:
+#First, lets fix a seed:
+set.seed(11)
+
+f <- function(a, mu_1, mu_2, s_1, s_2, x){
+  return((1/(1-a))*(dnorm(x, mu_1, s_1) - a*dnorm(x, mu_2, s_2)))
+}
+
+#See the pdf for details of the computation of a* :
+a_star <- function (mu_1, mu_2, s_1, s_2){
+  x <- (mu_2*s_1^2 - mu_1*s_2^2)/(s_1^2 - s_2^2)
+  return(dnorm(x, mu_1, s_1)/dnorm(x, mu_2, s_2))
+}
+
+mu_1 <- 0
+mu_2 <- 1
+s_1 <- 3
+s_2 <- 1
+a <- 0.2
+
+#Lets compute a* :
+print(paste0("a* = ", a_star(mu_1, mu_2, s_1, s_2)))
+```
+
+```{r}
+#Lets plot the pdf with different values of a: 
+
+x_vals <- seq(-12, 12, length.out = 1000)
+plot(x_vals, f(a, mu_1, mu_2, s_1, s_2, x_vals), type = "l", col = "blue",
+     main = "PDF FOR DIFFERENT VALUES OF a", xlab = "x", ylab = "f(x)", ylim = c(-0.2,0.4))
+lines(x_vals, f(0.2, mu_1, mu_2, s_1, s_2, x_vals), col = "blue")
+lines(x_vals, f(0.5, mu_1, mu_2, s_1, s_2, x_vals), col = "red")
+lines(x_vals, f(0.8, mu_1, mu_2, s_1, s_2, x_vals), col = "green")
+lines(x_vals, f(a_star(mu_1, mu_2, s_1, s_2), mu_1, mu_2, s_1, s_2, x_vals), col = "orange")
+abline(h = 0, col = "black", lty = 2)
+legend("topright", legend = c("a = 0.2", "a = 0.5", "a = 0.8", "a* = 0.313"),
+       col = c("blue", "red", "green", "orange"), lty = 1)
+```
+
+
+```{r}
+#Lets plot f with different values of s_2:
+plot(x_vals, f(a, mu_1, mu_2, s_1, s_2, x_vals), type = "l", col = "blue",
+     main = "PDF FOR DIFFERENT VALUES OF SIGMA_2", xlab = "x", ylab = "f(x)", xlim=c(-10,10))
+lines(x_vals, f(a, mu_1, mu_2, s_1, 1, x_vals), col = "blue")
+lines(x_vals, f(a, mu_1, mu_2, s_1, 1.5, x_vals), col = "red")
+lines(x_vals, f(a, mu_1, mu_2, s_1, 2, x_vals), col = "green")
+lines(x_vals, f(a, mu_1, mu_2, s_1, 3, x_vals), col = "orange")
+legend("topright", legend = c("sigma2 = 1", "sigma2 = 1.5", "sigma2 = 2",  "sigma2 = 3"),
+       col = c("blue", "red", "green", "orange"), lty = 1)
+```
+
+
+```{r}
+#Question 4: We did two methods that work, by Newton-Raphson or by bissection method:
+#For the next questions we will use the bissection method since it is more robust and sure.
+#The Newton-Raphson might need more hypothesis than we have, eventhough we 
+#will see that the results are similar for the two methods.
+
+#First, lets compute our cdf F of our density f: (see the pdf for the computation of F)
+F <- function(x, a, mu_1, mu_2, s_1, s_2){
+  Fx <- (1/(1-a))*(pnorm(x, mu_1, s_1) - a*pnorm(x, mu_2, s_2))
+  return(Fx)
+}
+
+f <- function(x, a, mu_1, mu_2, s_1, s_2){
+  f1 <- dnorm(x, mu_1, s_1)
+  f2 <- dnorm(x, mu_2, s_2)
+  return((1/(1-a))*(f1 - a*f2))
+}
+
+f1 <- function(x, mu_1, s_1){
+  return(dnorm(x, mu_1, s_1))
+}
+
+f2 <- function(x, mu_2, s_2){
+    return(dnorm(x, mu_2, s_2))
+}
+
+#First method : by Newton-Raphson
+
+Algo_Newton_Raphson <- function(u, a, mu_1, mu_2, s_1, s_2, eps, iter_max){
+  #Lets use Newton-Raphson method on the function
+  #G(x) = F(x) - u which is C^2, continue and
+  #strictly increasing since it is a sum 
+  #of 2 cdf of gaussian densities f1 and f2.
+
+  #For u>0, We necessarily have a x such 
+  #that G(x)=0 because G is strictly inscreasing and
+  #the limit of F for x -> -inf is 0+ so x exists and is unique.
+  iter <- 0
+  x0 <- (1/(1-a))*(mu_1 - a*mu_2)
+  Gx0 <- F(x0, a, mu_1, mu_2, s_1, s_2) - u
+  dGx0 <- f(x0, a, mu_1, mu_2, s_1, s_2)
+  if(dGx0 == 0){stop("Error : dG(x0) needs to be different from 0.")} #This case is never 
+  #supposed to happen since our G is well posed.
+  
+  while( (abs(Gx0)>=eps) & (iter <= iter_max)){
+    x_n <- x0 - Gx0/dGx0
+    x0 <- x_n
+    Gx0 <- F(x0, a, mu_1, mu_2, s_1, s_2) - u
+    dGx0 <- f(x0, a, mu_1, mu_2, s_1, s_2)
+    iter <- iter+1
+  }
+  if(iter == iter_max+1){
+    #The quantile we are looking for is obtained at an extreme value of our law, which 
+    #is similar on the tails to a gaussian law of density f1. 
+    #We then can take this approximation in this case since we are on the tails.
+    x0 <- qnorm(u, mu_1, s_1)
+    Gx0 <- F(x0, a, mu_1, mu_2, s_1, s_2) - u
+  }
+  
+  return(c(x0, Gx0))
+}
+```
+
+
+```{r}
+#Second method : by bissection (dichotomie)
+
+dichotomie <- function(u, a, mu_1, mu_2, s_1, s_2, eps, iter_max){
+  #We are going to work on G(x) = F(x) - u, where F is the cdf of f:
+  iter <- 0
+  a0 <- -500
+  b0 <- 500
+  Ga <- F(a0, a, mu_1, mu_2, s_1, s_2) - u
+  Gb <- F(b0, a, mu_1, mu_2, s_1, s_2) - u
+  
+  while(Ga*Gb > 0){ 
+  #Choice of a good interval of bissection : if [a0; b0] does 
+  #not contain the solution x, then we take a bigger interval
+    a0 <- a0 - 10000
+    b0 <- b0 + 10000
+    Ga <- F(a0, a, mu_1, mu_2, s_1, s_2) - u
+    Gb <- F(b0, a, mu_1, mu_2, s_1, s_2) - u
+    if(b0 > 1000000){
+  #The quantile we are looking for is obtained at an extreme value of our law, which 
+  #is similar on the tails to a gaussian law of density f1. 
+  #We then can take this approximation in this case since we are on the tails.
+      x0 <- qnorm(u, mu_1, s_1)
+      Gx <- F(x0, a, mu_1, mu_2, s_1, s_2) - u
+      return(c(x0, Gx))
+    }
+  }#End of the while leading to an interval [a0; b0] such that G(a0)*G(b0) <= 0.@
+  
+  if(Ga == 0){ #exact solution: a0
+    return(c(a0,Ga))
+  }else if(Gb == 0){ #exact solution: b0
+    return(c(b0,Gb))
+  }else{
+    x0 <- (a0 + b0)/2
+    Gx <- F(x0, a, mu_1, mu_2, s_1, s_2) - u
+  }
+  
+  while((abs(Gx) >= eps) & (iter <= iter_max)){
+    if(Gx*Ga < 0){
+      b0 <- x0
+      Gb <- F(b0, a, mu_1, mu_2, s_1, s_2) - u
+    } else{
+      a0 <- x0
+      Ga <- F(a0, a, mu_1, mu_2, s_1, s_2) - u
+    }
+    x0 <- (a0 + b0)/2
+    Gx <- F(x0, a, mu_1, mu_2, s_1, s_2) - u
+    iter <- iter+1
+  } #End of the while which gives the approximation.
+  
+  return(c(x0,Gx)) #we return our quantile x0 and our error Gx
+}
+
+```
+
+We are now going to estimate the quantile function with the parameters given.
+
+Checking: We compute F(x0) with x0 our results from the bissection or Newton-Raphson algorithm.
+If F(x0) == u, then x0 is exactly the quantile of u.
+We are going to test our results with different values of u to make sure our algorithm
+works well, even for extreme points on the tails of our function.
+
+In order to check our approximations, lets see if we can find back u from our quantile approximations:
+
+```{r}
+set.seed(11)
+#We are now going to estimate the quantile function with the parameters given.
+mu_1 = 0
+mu_2 = 1
+s_1 = 3
+s_2 = 1
+a = 0.2
+eps = 1e-5
+iter_max <- 10000
+
+U <- c(0.0005, 0.005, 0.25, 0.5, 0.75, 0.9, 0.995, 0.9995)
+ResN <- numeric(length(U))
+ResB <- numeric(length(U))
+
+for(i in 1:length(U)){
+  Xn <- dichotomie(U[i], a, mu_1, mu_2, s_1, s_2, eps, iter_max) #Bissection
+  Xd <- Algo_Newton_Raphson(U[i], a, mu_1, mu_2, s_1, s_2, eps, iter_max) #Newton
+  ResN[i] <- F(Xn[1], a, mu_1, mu_2, s_1, s_2)
+  ResB[i] <- F(Xd[1], a, mu_1, mu_2, s_1, s_2)
+}
+
+print(paste0("ResN = ", round(ResN*100, 5), "%")) 
+print(paste0("ResB = ", round(ResB*100, 5), "%"))
+print(paste0("U = ", U*100, "%"))
+
+```
+
+As we can see above, the two different algorithms (Newton, bissection) give a good approximation, very close to U.
+
+```{r}
+set.seed(11)
+#Inverse function method for our function f: 
+
+inverse_F <- function(a, mu_1, mu_2, s_1, s_2, eps, iter_max){
+  u <- runif(1)
+  X <- dichotomie(u, a, mu_1, mu_2, s_1, s_2, eps, iter_max)
+  return(X[1])
+}
+
+inverse_F(a, mu_1, mu_2, s_1, s_2, eps, iter_max)
+```
+
+
+We now have a random value from a random variable with distribution f.
+
+```{r}
+#Question 5:
+set.seed(11)
+n <- 10000
+
+#Lets compute n values from a random variable with
+#distribution f by the inverse function method:
+#We choose the bissection method, which is more robust and
+#does not need more conditions on the functions we have:
+inv_cdf <- function(n, a, mu_1, mu_2, s_1, s_2, eps, iter_max){
+  U <- runif(n)
+  X <- numeric(n)
+  Val <- numeric(n)
+  for(i in 1:n){
+    res <- dichotomie(U[i], a, mu_1, mu_2, s_1, s_2, eps, iter_max)
+    X[i] <- res[1]
+    Val[i] <- f(X[i], a, mu_1, mu_2, s_1, s_2)
+  }
+  return(X)
+}
+
+#Now we plot the histogram:
+Val <- inv_cdf(n, a, mu_1, mu_2, s_1, s_2, eps, iter_max)
+val_x <- seq(min(Val), max(Val), length.out = 1000)
+val_y <- f(val_x, a, mu_1, mu_2, s_1, s_2)
+
+hist(Val, breaks=50, freq=FALSE, main="Histogram of f with the Inverse method",
+col="lightblue", border="black", xlab="values of the random sample", ylab="density of f") 
+lines(val_x, val_y, col = "red", lwd=3)
+
+```
+
+
+We then have a histogram representing the density f, we can see it follows the red line representing our function.
+
+
+```{r}
+set.seed(11)
+#Question 7:
+#By question 6, we take M = 1/(1-a) and g(x) = f1(x)
+mu_1 = 0
+mu_2 = 1
+s_1 = 3
+s_2 = 1
+a = 0.2
+
+f <- function(x, a, mu_1, mu_2, s_1, s_2){
+  f1 <- dnorm(x, mu_1, s_1)
+  f2 <- dnorm(x, mu_2, s_2)
+  return((1/(1-a))*(f1 - a*f2))
+}
+
+g <- function(x){return(dnorm(x, mu_1, s_1))}
+
+#Accept-Reject method:
+accept_reject <- function(n, a, mu_1, mu_2, s_1, s_2){
+  M <- 1/(1-a) #We take this M by question 6
+  index <- 1
+  cpt <- 0
+  X <- numeric(n)
+  while(index<=n){
+    cpt <- cpt+1
+    U <- runif(1)
+    Y <- rnorm(1, mu_1, s_1)
+    if(U*M*g(Y) < f(Y, a, mu_1, mu_2, s_1, s_2)){
+      X[index] <- Y
+      index <- index + 1
+    }
+  }
+  #Lets compute the empirical and theoritical rate and 
+  #see if they are matching: (see the output R-Console)
+  rate <- n/cpt #empirical rate
+  print(paste0("For a=", round(a,4),", empirical rate = ", round(rate*100, 5), 
+               "%", "  and theoritical rate = ", round(100/M, 5), "%")) 
+  #return(X)
+  return(list(X=X, rate=rate))
+}  
+
+n <- 10000
+Reject_x <- accept_reject(n, a, mu_1, mu_2, s_1, s_2)$X
+val_x <- seq(min(Reject_x), max(Reject_x), length.out = 100)
+val_y <- f(val_x, a, mu_1, mu_2, s_1, s_2)
+
+hist(Reject_x, breaks=40, main="Histogram of f with the Accept-Reject method", 
+freq=FALSE, col="lightblue", border="black", xlab="values of 
+our random sample", ylab="density of f")
+lines(val_x, val_y, col = "red", lwd=3)
+
+#We can see in the R-console output that the 
+#empirical and theoritical rates are similar.
+```
+```{r}
+set.seed(11)
+#Question 8:
+
+#We have a* = 0.3131377 by question 3:
+n <- 10000
+a_star <- 0.3131377
+
+#Lets compute our approximations of f with 10 different values of a between 0 and a_star:
+A <- seq(0, a_star+0.2, length.out = 10)
+rateX <- numeric(length(A))
+for(i in 1:length(A)){
+  rateX[i] <- accept_reject(n, A[i], mu_1, mu_2, s_1, s_2)$rate
+}
+
+plot(A, rateX*100, ylab = "empirical rate in %", xlab="values of a", type="b", col = "blue", main="Decreasing of the acceptance rate for different values of a")
+abline(v = a_star, col = "red", ) #the red line represents a_star
+mtext("a*", side=1, at = a_star, col="red")
+```
+
+As we can see in the output, when a gets bigger, our acceptance rate is decreasing.
+This comes from the choice of our reject-function g because when a=0, then f=g. 
+When a > 0, the gap between functions f and g increases, which leads to a decrease in the acceptance rate.
+
+*------------------------------------------------------
+PART 2 OF THE PROJECT :
+
+```{r}
+mu_1 <- 0
+mu_2 <- 1
+s_1 <- 3
+s_2 <- 1
+a <- 0.2
+Z <- 1-a
+eps = 1e-5 #Error of approximations of the values of the intervals of stratification
+iter_max <- 10000
+```
+
+
+```{r}
+#Question 11:
+
+k <- 10 #We will have k+1 strats: D0,...,Dk.
+alpha <- 0.001 #this is the percentage of the integral of f left to be estimated by D0
+#in other words, P(X in D0) = alpha. 
+#This can be useful if we want to choose the percentage 
+#of f left to be estimated by D1,....Dk, and a smaller/larger portion by D0.
+
+#iterative algorithm to compute the values of the intervals
+partitionList <- function(k, alpha){
+  
+  if(k<2){stop("Error: k needs to be >= 2")}
+  if(alpha <= 0 || alpha >= 1){stop("Error: alpha must be strictly between 0 and 1")}
+  L <- numeric(k+1) #We have k+1 strats
+  FDk <- numeric(k+1)
+  lambdaDi <- numeric(k) #Lebesgue measures of the strats: lambda(Dk) = L[k+1] - L[k]
+  Proba_Di <- (1-alpha)/k #We use a uniform approach to evaluate
+  #our Di: X will have the same probability to be in
+  #each D1,....,Dk: P(X in Di) = Proba_Di, for i=1,..,k
+  
+  #Lets first compute a0 such that D0 = ]-inf;a0[U]ak;+inf[
+  a0 <- dichotomie(alpha/2, a, mu_1, mu_2, s_1, s_2, eps, iter_max)[1] #P(X<a0) = alpha/2
+  F0 <- F(a0, a, mu_1, mu_2, s_1, s_2)
+  L[1] <- a0
+  FDk[1] <- F0
+  
+  #Lets compute the rest of the intervals:
+  for(i in 2:(k+1)){
+    FDk[i] <- Proba_Di + FDk[i-1]
+    L[i] <- dichotomie(FDk[i], a, mu_1, mu_2, s_1, s_2, eps, iter_max)[1]
+    lambdaDi[i-1] <- L[i] - L[i-1]
+  }
+  return(list(L=L, FDk=FDk, Proba_Di=Proba_Di, lambdaDi=lambdaDi))
+}
+
+partition <- partitionList(k, alpha)
+partition
+```
+
+```{r}
+create_Mk <- function(partition){
+  L <- partition$L
+  FDk <- partition$FDk
+  Proba_Di <- partition$Proba_Di
+  lambdaDi <- partition$lambdaDi
+  supG <- numeric(length(L)-1)
+  Mk <- numeric(length(L)-1)
+  
+  for(i in 1:length(Mk)){
+    Li <- c(L[i],L[i+1])
+    supG[i] <- (1/Z)*(optimize(f1, interval = Li, maximum = TRUE, mu_1=mu_1, s_1=s_1)$objective - a*optimize(f2, interval = Li, mu_2=mu_2, s_2=s_2)$objective)
+    #supG[i] <- optimize(f, interval = Li, maximum = TRUE, a=a, mu_1=mu_1, mu_2=mu_2, s_1=s_1, s_2=s_2)$objective
+  }
+
+  Mk <- supG*lambdaDi/Proba_Di
+  return(Mk)
+}
+test <- create_Mk(partition)
+print(test)
+```
+```{r}
+library(truncnorm)
+k <- 200
+alpha <- 0.01
+#methode de rejet stratified:
+#on va ajouter M0=1/Z et g0=f1
+```
+
+
+```{r}
+stratified <- function(n){
+  
+  partition <- partitionList(k, alpha)
+  L <- partition$L
+  lambdaDi <- partition$lambdaDi
+  Proba_Di <- partition$Proba_Di
+  Mk <- create_Mk(partition)
+  M0 <- 1/Z
+  index <- 1
+  cpt <- 0
+  X <- numeric(n)
+  probas <- c(alpha, rep(Proba_Di, k))
+  
+  while(index<n){
+    cpt <- cpt+1
+    U <- runif(1)
+    strates_index <- sample(0:k, 1, prob=probas)
+    
+    if(strates_index == 0){ #on D0, we use Y a sample of density f1
+      B <- rbinom(1, 1, 1/2)*1 #car on a meme proba de tirer sur une des 2 tails
+      if(B==0){#normale tronquee sur la premiere partie de D0
+        Y <- rtruncnorm(1, a=-Inf, b=L[1], mu_1, s_1)
+        gY <- dtruncnorm(Y, a=-Inf, b=L[1], mu_1, s_1)
+      }else{#normale tronquee sur la deuxieme partie de D0
+        Y <- rtruncnorm(1, a=L[length(L)], b=+Inf, mu_1, s_1)
+        gY <- dtruncnorm(Y, a=L[length(L)], b=+Inf, mu_1, s_1)
+      }
+
+      if(U*M0*gY < 2*f(Y, a, mu_1, mu_2, s_1, s_2)/alpha){
+        X[index] <- Y
+        index <- index+1
+      }
+    }else{
+      Y <- runif(1, L[strates_index], L[strates_index+1])
+      if(U*Mk[strates_index]/lambdaDi[strates_index] < f(Y, a, mu_1, mu_2, s_1, s_2)/Proba_Di){ 
+        X[index] <- Y
+        index <- index+1
+      }
+    }
+    
+  }
+  rateT <- sum(c(alpha/M0, Proba_Di/Mk))
+  rate <- n/cpt
+  return(list(X=X, rate=rate, rateT=rateT))
+}
+```
+
+
+```{r}
+set.seed(10)
+stratification <- stratified(10000)
+X <- stratification$X
+summary(X)
+```
+
+```{r}
+rate <- stratification$rate
+rateT <- stratification$rateT
+print(paste0("Empirical rate: ", round(rate*100, 2), "%"))
+print(paste0("Theoritical rate: ", round(rateT*100, 2), "%"))
+```
+```{r}
+hist(X, breaks=40, main="Histogram of f with the stratified Accept-Reject method", 
+freq=FALSE, col="lightblue", border="black", xlab="values of 
+our random sample", ylab="density of f")
+val_x <- seq(min(X), max(X), length.out = 100)
+val_y <- f(val_x, a, mu_1, mu_2, s_1, s_2)
+lines(val_x, val_y, col = "red", lwd=3)
+```
+```{r}
+#Question 12:
+
+#We can choose our acceptance rate delta:
+stratified2 <- function(n, delta){
+  k <- 50
+  alpha <- 0.01
+  partition <- partitionList(k, alpha)
+  Proba_Di <- partition$Proba_Di
+  Mk <- create_Mk(partition)
+  M0 <- 1/Z
+  rateT <- sum(c(alpha/M0, Proba_Di/Mk))
+  while(rateT<delta){
+    if(delta<0.99){k <- k+100}
+    if(delta>=0.99){k <- k*10 + 100}#We want k to grow faster if the 
+                                #acceptance rate wanted is close to 1
+    partition <- partitionList(k, alpha)
+    Proba_Di <- partition$Proba_Di
+    Mk <- create_Mk(partition)
+    M0 <- 1/Z
+    rateT <- sum(c(alpha/M0, Proba_Di/Mk))
+  }
+  L <- partition$L
+  lambdaDi <- partition$lambdaDi
+  index <- 1
+  cpt <- 0
+  X <- numeric(n)
+  probas <- c(alpha, rep(Proba_Di, k))
+  
+  while(index<n){
+    cpt <- cpt+1
+    U <- runif(1)
+    strates_index <- sample(0:k, 1, prob=probas)
+    
+    if(strates_index == 0){ #on D0, we use Y a sample of density f1
+      B <- rbinom(1, 1, 1/2)*1 #car on a meme proba de tirer sur une des 2 tails
+      if(B==0){#normale tronquee sur la premiere partie de D0
+        Y <- rtruncnorm(1, a=-Inf, b=L[1], mu_1, s_1)
+        gY <- dtruncnorm(Y, a=-Inf, b=L[1], mu_1, s_1)
+      }else{#normale tronquee sur la deuxieme partie de D0
+        Y <- rtruncnorm(1, a=L[length(L)], b=+Inf, mu_1, s_1)
+        gY <- dtruncnorm(Y, a=L[length(L)], b=+Inf, mu_1, s_1)
+      }
+        
+      if(U*gY < 2*f(Y, a, mu_1, mu_2, s_1, s_2)/alpha){ 
+        X[index] <- Y
+        index <- index+1
+      }
+    }else{
+      Y <- runif(1, L[strates_index], L[strates_index+1])
+      if(U*Mk[strates_index]/lambdaDi[strates_index] < f(Y, a, mu_1, mu_2, s_1, s_2)/Proba_Di){ 
+        X[index] <- Y
+        index <- index+1
+      }
+    }
+    
+  }
+  rate <- n/cpt
+  return(list(X=X, rate=rate, rateT=rateT, L=L))
+}
+
+```
+
+```{r}
+set.seed(1)
+stratification2 <- stratified2(10000, 0.99)
+X <- stratification2$X
+summary(X)
+```
+```{r}
+rate <- stratification2$rate
+rateT <- stratification2$rateT
+print(paste0("Empirical rate: ", round(rate*100, 3), "%"))
+print(paste0("Theoritical rate: ", round(rateT*100, 3), "%"))
+
+#Remark: when we want an acceptance rate greater than 99,9%, our theoretical rate
+#is no longer accurate: this can be caused by the approximations of
+#the intervals and the supremums of f.
+#However, our empirical rate is still valid.
+```
+
+
+```{r}
+hist(X, breaks=40, main="Histogram of f with the stratified Accept-Reject method", 
+freq=FALSE, col="lightblue", border="black", xlab="values of 
+our random sample", ylab="density of f")
+val_x <- seq(min(X), max(X), length.out = 100)
+val_y <- f(val_x, a, mu_1, mu_2, s_1, s_2)
+lines(val_x, val_y, col = "red", lwd=3)
+```
+```{r}
+# QUESTION 15
+set.seed(11)
+n <- 10000
+delta <- 0.99#Acceptance rate
+
+Xn <- stratified2(n, delta)$X
+
+empirical_cdf <- function(x,Xn){
+  M <- (x >= Xn)
+  return ( mean(M))
+}
+val <- empirical_cdf(5, Xn)
+
+#We can now compare our algorithm with the actual cdf:
+val
+F(5, a, mu_1, mu_2, s_1, s_2)
+```
+```{r}
+set.seed(10)
+# Points d'évaluation de la CDF
+x_values <- seq(-5, 5, length.out = 100)
+
+# Différentes tailles d'échantillons
+n_values <- c(10, 50, 100, 500, 1000)
+
+# Calcul de la vraie CDF
+CDF <- sapply(x_values, F, a = a, mu_1 = mu_1, mu_2 = mu_2, s_1 = s_1, s_2 = s_2)
+
+# Initialisation du graphique avec la vraie fonction de répartition
+plot(x_values, CDF, type = "l", col = "red", lwd = 2, xlab = "x", ylab = "CDF",
+     main = "Strong Consistency of Empirical CDF")
+legend("topleft", legend = c("True CDF", "Empirical CDF"), col = c("red", "blue"), lty = 1)
+
+# Boucle sur les tailles d'échantillons
+for (n in n_values) {
+  #We generate the sample of size n with the stratified reject method:
+  Xn <- stratified(n)$X
+  
+  # Calcul de la CDF empirique pour chaque x
+  empirical_cdf_values <- sapply(x_values, function(x) mean(Xn <= x))
+  
+  # Ajouter la courbe empirique au graphique
+  lines(x_values, empirical_cdf_values, col = "blue", lwd = 1, lty = 2)
+}
+
+```
+```{r}
+# QUESTION 17
+simu_Intervalle_conf <- function(n, target_confidence, tolerance, max_n){
+  set.seed(10)
+  # Calcul du quantile critique basé sur target_confidence
+  q <- qnorm(1 - (1 - target_confidence) / 2)
+
+  # Initialisation pour le stockage des résultats
+  n_values <- c()  # Stocker les tailles d'échantillons
+  interval_widths <- c()  # Stocker les largeurs d'intervalle
+
+  while (n < max_n) {
+    # Simuler les données avec stratified
+    #Xn <- stratified2(n, delta)$X
+    Xn <- stratified(n)$X
+    
+    # Calculer la fonction de répartition empirique
+    F_n <- empirical_cdf(x, Xn)
+  
+    # Calculer les bornes de l'intervalle de confiance
+    lower_bound <- F_n - (q / sqrt(n)) * sqrt(F_n * (1 - F_n))
+    upper_bound <- F_n + (q / sqrt(n)) * sqrt(F_n * (1 - F_n))
+  
+    # Calculer la largeur de l'intervalle
+    interval_width <- upper_bound - lower_bound
+  
+    # Stocker les résultats pour le tracé
+    n_values <- c(n_values, n)
+    interval_widths <- c(interval_widths, interval_width)
+  
+    # Vérifier si la largeur de l'intervalle est inférieure à la tolérance
+   if (interval_width < tolerance) {
+      cat("Nombre de simulations nécessaires pour atteindre la précision :", n, "\n")
+      cat("Largeur de l'intervalle :", interval_width, "\n")
+      cat("Bornes de l'intervalle : [", lower_bound, ", ", upper_bound, "]\n")
+      break
+    }
+  
+    # Doubler la taille de l'échantillon si la tolérance n'est pas atteinte
+    n <- n * 2
+  }
+
+  if (n >= max_n) {
+    cat("Tolérance non atteinte avec le nombre maximum de simulations :", max_n, "\n")
+  }
+  return(list(n_values=n_values, interval_widths=interval_widths))
+}
+```
+
+```{r}
+#For x = 1:
+target_confidence <- 0.95
+n <- 10  # Start with a small number of simulations
+tolerance <- 0.01  # Define acceptable margin of error
+max_n <- 1e6  # Maximum number of simulations
+x <- 1
+
+L <- simu_Intervalle_conf(n, target_confidence, tolerance, max_n)
+n_values = L$n_values
+interval_widths = L$interval_widths
+
+# Tracé des résultats
+plot(n_values, interval_widths, type = "o",  log = "x",  xlab = "Taille de l'échantillon (n)", ylab = "Largeur de l'intervalle", main = "Convergence de l'intervalle de confiance", col = "blue", pch = 16 )
+abline(h = tolerance, col = "red", lty = 2)  # Ligne de tolérance
+legend("topright", legend = c("Largeur d'intervalle", "Tolérance"), col = c("blue", "red"), lty = c(1, 2), pch = c(16, NA))
+```
+```{r}
+#For x = -15:
+target_confidence <- 0.95
+n <- 10  # Start with a small number of simulations
+tolerance <- 0.01  # Define acceptable margin of error
+max_n <- 1e6  # Maximum number of simulations
+x <- -15
+
+simu_Intervalle_conf(n, target_confidence, tolerance, max_n)
+
+# Tracé des résultats
+plot( n_values, interval_widths, type = "o",  log = "x",  xlab = "Taille de l'échantillon (n)", ylab = "Largeur de l'intervalle", main = "Convergence de l'intervalle de confiance", col = "blue", pch = 16 )
+abline(h = tolerance, col = "red", lty = 2)  # Ligne de tolérance
+legend("topright", legend = c("Largeur d'intervalle", "Tolérance"), col = c("blue", "red"), lty = c(1, 2), pch = c(16, NA))
+```
+```{r}
+# QUESTION 21
+empirical_quantile <- function(u, Xn) {
+  # Trier les observations
+  sorted_Xn <- sort(Xn)
+  n <- length(Xn)
+  
+  # Identifier le quantile
+  for (i in 1:n) {
+    if (i / n >= u) {
+      return(sorted_Xn[i])
+    }
+  }
+}
+
+n <- 10000
+Xn <- stratified(n)$X
+# Calculer les quantiles pour différentes valeurs de u
+u_values <- c(0.001, 0.01, 0.05, 0.5, 0.95, 0.99, 0.999, 0.9999, 0.99999)
+quantiles <- sapply(u_values, function(u) empirical_quantile(u, Xn))
+quantiles
+```
+
+
+```{r}
+#We check that we actually have the initial values of u (u_values):
+Fquant <- sapply(quantiles, function(qu) F(qu, a, mu_1, mu_2, s_1, s_2))
+Fquant
+```
+
+```{r}
+u <- 0.5
+target_confidence <- 0.95
+n <- 10  
+tolerance <- 0.01  
+max_n <- 1e7 
+
+
+set.seed(10)
+# Calcul du quantile critique basé sur target_confidence
+q <- qnorm(1 - (1 - target_confidence) / 2)
+
+# Initialisation pour le stockage des résultats
+n_values <- c()  # Stocker les tailles d'échantillons
+interval_widths <- c()  # Stocker les largeurs d'intervalle
+
+while (n < max_n) {
+  # we compute the empirical quantile
+  Q_n <- empirical_quantile(u, Xn)
+  #we compute the boundaries 
+  lower_bound <- Q_n - q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  upper_bound <- Q_n + q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  #print(f(a, mu_1, mu_2, s_1, s_2, Q_n))
+  #We compute the width
+  interval_width <- upper_bound - lower_bound 
+  
+  # Stocker les résultats pour le tracé
+  n_values <- c(n_values, n)
+  interval_widths <- c(interval_widths, interval_width)
+
+  # Vérifier si la largeur de l'intervalle est inférieure à la tolérance
+  if (interval_width < tolerance) {
+
+    cat("Nombre de simulations nécessaires pour atteindre la précision :", n, "\n")
+    cat("Largeur de l'intervalle :", interval_width, "\n")
+    cat("Bornes de l'intervalle : [", lower_bound, ", ", upper_bound, "]\n")
+    break
+  }
+  
+  # Doubler la taille de l'échantillon si la tolérance n'est pas atteinte
+  n <- n * 2
+}
+
+if (n >= max_n) {
+  cat("Tolérance non atteinte avec le nombre maximum de simulations :", max_n, "\n")
+}
+plot(n_values, interval_widths, type = "l", col = "blue", lwd = 2, xlab = "Sample size (n)", ylab = "Interval width", main = "Convergence of the interval width")
+abline(h = 0, col = "black", lty = 2)
+
+```
+```{r}
+u <- 0.9
+target_confidence <- 0.95
+n <- 10  
+tolerance <- 0.01  
+max_n <- 1e7 
+
+set.seed(10)
+
+q <- qnorm(1 - (1 - target_confidence) / 2)
+n_values <- c()  
+interval_widths <- c()
+while (n < max_n) {
+  Q_n <- empirical_quantile(u, Xn)
+  lower_bound <- Q_n - q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  upper_bound <- Q_n + q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  interval_width <- upper_bound - lower_bound 
+  n_values <- c(n_values, n)
+  interval_widths <- c(interval_widths, interval_width)
+  if (interval_width < tolerance) {
+    cat("Nombre de simulations nécessaires pour atteindre la précision :", n, "\n")
+    cat("Largeur de l'intervalle :", interval_width, "\n")
+    cat("Bornes de l'intervalle : [", lower_bound, ", ", upper_bound, "]\n")
+    break
+  }
+  n <- n * 2
+}
+if (n >= max_n) {
+  cat("Tolérance non atteinte avec le nombre maximum de simulations :", max_n, "\n")
+}
+plot(n_values, interval_widths, type = "l", col = "orange", lwd = 2, xlab = "Sample size (n)", ylab = "Interval width", main = "Convergence of the interval width")
+abline(h = 0, col = "black", lty = 2)  
+```
+```{r}
+u <- 0.99
+target_confidence <- 0.95
+n <- 10  
+tolerance <- 0.01  
+max_n <- 1e9
+
+set.seed(10)
+
+q <- qnorm(1 - (1 - target_confidence) / 2)
+n_values <- c()  
+interval_widths <- c()
+while (n < max_n) {
+  Q_n <- empirical_quantile(u, Xn)
+  lower_bound <- Q_n - q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  upper_bound <- Q_n + q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  interval_width <- upper_bound - lower_bound 
+  n_values <- c(n_values, n)
+  interval_widths <- c(interval_widths, interval_width)
+  if (interval_width < tolerance) {
+    cat("Nombre de simulations nécessaires pour atteindre la précision :", n, "\n")
+    cat("Largeur de l'intervalle :", interval_width, "\n")
+    cat("Bornes de l'intervalle : [", lower_bound, ", ", upper_bound, "]\n")
+    break
+  }
+  n <- n * 2
+}
+if (n >= max_n) {
+  cat("Tolérance non atteinte avec le nombre maximum de simulations :", max_n, "\n")
+}
+plot(n_values, interval_widths, type = "l", col = "green", lwd = 2, xlab = "Sample size (n)", ylab = "Interval width", main = "Convergence of the interval width")
+abline(h = 0, col = "black", lty = 2) 
+F(Q_n, a, mu_1, mu_2, s_1, s_2)
+```
+
+```{r}
+u <- 0.999
+target_confidence <- 0.95
+n <- 10  
+tolerance <- 0.01  
+max_n <- 1e9
+
+set.seed(10)
+
+q <- qnorm(1 - (1 - target_confidence) / 2)
+n_values <- c()  
+interval_widths <- c()
+while (n < max_n) {
+  Q_n <- empirical_quantile(u, Xn)
+  lower_bound <- Q_n - q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  upper_bound <- Q_n + q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  interval_width <- upper_bound - lower_bound 
+  n_values <- c(n_values, n)
+  interval_widths <- c(interval_widths, interval_width)
+  if (interval_width < tolerance) {
+    cat("Nombre de simulations nécessaires pour atteindre la précision :", n, "\n")
+    cat("Largeur de l'intervalle :", interval_width, "\n")
+    cat("Bornes de l'intervalle : [", lower_bound, ", ", upper_bound, "]\n")
+    break
+  }
+  n <- n * 2
+}
+if (n >= max_n) {
+  cat("Tolérance non atteinte avec le nombre maximum de simulations :", max_n, "\n")
+}
+plot(n_values, interval_widths, type = "l", col = "green", lwd = 2, xlab = "Sample size (n)", ylab = "Interval width", main = "Convergence of the interval width")
+abline(h = 0, col = "black", lty = 2) 
+F(Q_n, a, mu_1, mu_2, s_1, s_2)
+```
+
+```{r}
+u <- 0.9999
+target_confidence <- 0.95
+n <- 10  
+tolerance <- 0.01  
+max_n <- 1e9
+
+set.seed(10)
+
+q <- qnorm(1 - (1 - target_confidence) / 2)
+n_values <- c()  
+interval_widths <- c()
+while (n < max_n) {
+  Q_n <- empirical_quantile(u, Xn)
+  lower_bound <- Q_n - q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  upper_bound <- Q_n + q*(sqrt(u*(1-u))/(sqrt(n)*f(Q_n, a, mu_1, mu_2, s_1, s_2)))
+  interval_width <- upper_bound - lower_bound 
+  n_values <- c(n_values, n)
+  interval_widths <- c(interval_widths, interval_width)
+  if (interval_width < tolerance) {
+    cat("Nombre de simulations nécessaires pour atteindre la précision :", n, "\n")
+    cat("Largeur de l'intervalle :", interval_width, "\n")
+    cat("Bornes de l'intervalle : [", lower_bound, ", ", upper_bound, "]\n")
+    break
+  }
+  n <- n * 2
+}
+if (n >= max_n) {
+  cat("Tolérance non atteinte avec le nombre maximum de simulations :", max_n, "\n")
+}
+plot(n_values, interval_widths, type = "l", col = "green", lwd = 2, xlab = "Sample size (n)", ylab = "Interval width", main = "Convergence of the interval width")
+abline(h = 0, col = "black", lty = 2) 
+F(Q_n, a, mu_1, mu_2, s_1, s_2)
+```
+
+
+```{r}
+#PART 3 of the project 
+#Question 24:
+
+accept_reject_quantile <- function(q,n){
+  X <- stratified(n)$X
+  delta <- mean(X>=q)
+  return(delta)
+}
+
+#Lets compare our result with the estimation given by R : 1-F(q)
+q = -1
+accept_reject_quantile(q, 100000)
+1-F(q, a, mu_1, mu_2, s_1, s_2)
+
+```
+
+
+```{r}
+#Question 25:
+Confidence_reject_quantile <- function(q, alpha, epsilon){
+  n <- 100000
+  q_alpha <- qnorm(1-alpha/2)
+  delta_n <- accept_reject_quantile(q, n)
+  a <- delta_n - q_alpha*sqrt(delta_n*(1-delta_n)/n)
+  b <- delta_n + q_alpha*sqrt(delta_n*(1-delta_n)/n)
+  width <- b-a
+  while( width>epsilon | b-a==0 ){
+    n <- n*2
+    delta_n <- accept_reject_quantile(q, n)
+    a <- delta_n - q_alpha*sqrt(delta_n*(1-delta_n)/n)
+    b <- delta_n + q_alpha*sqrt(delta_n*(1-delta_n)/n)
+    width <- b-a
+  }
+  return(list(delta=delta_n, interval=c(a,b), width=width, n=n))
+}
+```
+
+```{r}
+q <- -1
+alpha <- 0.05
+epsilon <- 0.01
+#We can see that the method is extremely slow
+#for a precision "epsilon" smaller than 0.001, due to this naive approach
+
+M <- Confidence_reject_quantile(q, alpha, epsilon)
+M
+
+```
+
+```{r}
+#Question 28: Importance sampling
+ff <- function(x){
+  return((dnorm(x, mu_1, s_1) - a*dnorm(x, mu_2, s_2))/(1-a))
+}
+
+IS_quantile <- function(q,n){
+  Z <- rcauchy(n, q, 1)
+  Zinv <- -Z + 2*q
+  Zinv2 <- 1/(Z-q) + q #We can add an antithetic approach, since these 
+  #transformations of Z are still Cauchy distributions with same parameters
+  Z <- c(Z, Zinv, Zinv2)
+  hZ <- (Z>q)
+  fZ <- ff(Z)
+  gZ <- dcauchy(Z, q, 1)
+  delta <- mean(fZ*hZ/gZ)
+  return(delta)
+}
+```
+
+```{r}
+set.seed(11)
+q <- 11
+IS_quantile(q, 100000)
+1-F(q, a, mu_1, mu_2, s_1, s_2)
+```
+```{r}
+Confidence_IS <- function(q, alpha, epsilon){
+  n <- 100000
+  q_alpha <- qnorm(1-alpha/2)
+  delta_n <- IS_quantile(q, n)
+  a <- delta_n - q_alpha*sqrt(delta_n*(1-delta_n)/n)
+  b <- delta_n + q_alpha*sqrt(delta_n*(1-delta_n)/n)
+  width <- b-a
+  while( width>epsilon | b-a==0 ){
+    n <- n*2
+    delta_n <- IS_quantile(q, n)
+    a <- delta_n - q_alpha*sqrt(delta_n*(1-delta_n)/n)
+    b <- delta_n + q_alpha*sqrt(delta_n*(1-delta_n)/n)
+    width <- b-a
+  }
+  return(list(delta=delta_n, interval=c(a,b), width=width, n=n))
+}
+```
+
+```{r}
+q <- 11
+alpha <- 0.05
+epsilon <- 0.001
+#We can get an incredible precision with this method
+#It is extremely effective, even for rare events such as q=11: 
+
+M <- Confidence_IS(q, alpha, epsilon)
+M
+```
+```{r}
+#Question 31
+
+simu <- function(n){
+  
+  partition <- partitionList(k, alpha)
+  L <- partition$L
+  lambdaDi <- partition$lambdaDi
+  Proba_Di <- partition$Proba_Di
+  Mk <- create_Mk(partition)
+  M0 <- 1/Z
+  index <- 1
+  cpt <- 0
+  X <- numeric(n)
+  probas <- c(alpha, rep(Proba_Di, k))
+  
+  while(index<n){
+    cpt <- cpt+1
+    U <- runif(1)
+    strates_index <- sample(0:k, 1, prob=probas)
+    
+    if(strates_index == 0){ #on D0, we use Y a sample of density f1
+      B <- rbinom(1, 1, 1/2)*1 #car on a meme proba de tirer sur une des 2 tails
+      if(B==0){#normale tronquee sur la premiere partie de D0
+        Y <- rtruncnorm(1, a=-Inf, b=L[1], mu_1, s_1)
+        gY <- dtruncnorm(Y, a=-Inf, b=L[1], mu_1, s_1)
+      }else{#normale tronquee sur la deuxieme partie de D0
+        Y <- rtruncnorm(1, a=L[length(L)], b=+Inf, mu_1, s_1)
+        gY <- dtruncnorm(Y, a=L[length(L)], b=+Inf, mu_1, s_1)
+      }
+      
+      if(U*M0*gY < 2*f(Y, a, mu_1, mu_2, s_1, s_2)/alpha){
+        X[index] <- Y
+        index <- index+1
+      }
+    }else{
+      Y <- runif(1, L[strates_index], L[strates_index+1])
+      if(U*Mk[strates_index]/lambdaDi[strates_index] < f(Y, a, mu_1, mu_2, s_1, s_2)/Proba_Di){ 
+        X[index] <- Y
+        index <- index+1
+      }
+    }
+    
+  }
+  rateT <- sum(c(alpha/M0, Proba_Di/Mk))
+  rate <- n/cpt
+  return(list(X=X, rate=rate, rateT=rateT))
+}
+
+#let's compute the density function no-normalize of Negative weighted mixture
+ff <- function(x){
+  f1 <- dnorm(x, mu_1, s_1)
+  f2 <- dnorm(x, mu_2, s_2)
+  return((f1 - a*f2))
+}
+#Compute the score function as a candidate to be h0 with the expectation 0
+h0 = function(x){
+  return(((1/sqrt(2*pi))*((x-mu_1) /s_1**3) *exp(-(x-mu_1)**2 / s_1**2)) / ff(x))
+}
+
+h = function(x){
+  return(x>q)
+}
+
+n = 10000
+q = 1.9 #one of a quantile which use for example
+
+b<-rep(0, n)
+simu1 = simu(n)$X
+#we calculate a sequence of b's and then identify when b is stable. 
+
+# Utilisation de sapply pour vectoriser le calcul
+b <- sapply(1:n, function(i) {
+  simu_subset <- simu1[1:i]  
+  cov(h0(simu_subset), h(simu_subset)) / var(h0(simu_subset))
+})
+
+#The aim is to take the smallest number of observations for b, so as to leave enough to estimate our quantity 
+plot(b, main = "Convergence de b")
+
+burn = 200
+b_star = b[burn] #methode de burn-in
+
+escv = function(n){
+  simu1 = simu(n)$X
+  simu1 = simu1[-(1:burn)] #burn les 200 premiers termes. 
+  esti = h(simu1) - b_star*h0(simu1)
+  return(list(esti = mean(esti), var = esti))
+}
+
+F2 <- function(x){
+  Fx <- (1/(1-a))*(pnorm(x, mu_1, s_1) - a*pnorm(x, mu_2, s_2))
+  return(Fx)
+} #To check
+escv(n)$esti
+```
+
+```{r}
+IC_cv <- function(alpha, epsilon){
+  q_alpha <- qnorm(1-alpha/2)
+  #Bornes de l'intervalle 1-alpha de precision epsilon
+  delta_n <- escv(n)$esti
+  a <- delta_n - q_alpha*sqrt(delta_n*(1-delta_n)/n)
+  b <- delta_n + q_alpha*sqrt(delta_n*(1-delta_n)/n)
+  width <- b-a
+  while( width>epsilon | b-a==0 ){
+    n <- n*2
+    delta_n <- escv(n)$esti
+    a <- delta_n - q_alpha*sqrt(delta_n*(1-delta_n)/n)
+    b <- delta_n + q_alpha*sqrt(delta_n*(1-delta_n)/n)
+    width <- b-a
+  }
+  return(list(delta=delta_n, interval=c(a,b), width=width, n=n))
+}
+
+alpha <- 0.05
+epsilon <- 0.01
+#q_alpha <- qnorm(1-alpha/2)
+#n <- ceiling((q_alpha**2)/(epsilon**2)) + 10000
+L2 = IC_cv(alpha, epsilon)
+L2
+```
+
+```{r}
+# Question 32
+#algo naive
+esn <- function(n){
+  X <- stratified(n)$X
+  delta <- mean(X>=q)
+  return(list(esti = delta, var = X>=q))
+}
+
+v1 = var(esn(n)$var)
+library(microbenchmark) #library to have a compututional cos
+c = microbenchmark(esn(n))
+c1 = median(c$time[c$expr == "esn(n)"])
+
+R1 = c1*v1
+
+R1
+```
+
+```{r}
+#algo echantillonage preferentielle
+ff <- function(x){
+  return((dnorm(x, mu_1, s_1) - a*dnorm(x, mu_2, s_2))/(1-a))
+}
+
+esis <- function(n){
+  Z <- rcauchy(n, q, 1)
+  Zinv <- -Z + 2*q
+  Zinv2 <- 1/(Z-q) + q #We can add an antithetic approach, since these 
+  #transformations of Z are still Cauchy distributions with same parameters
+  Z <- c(Z, Zinv, Zinv2)
+  hZ <- (Z>q)
+  fZ <- ff(Z)
+  gZ <- dcauchy(Z, q, 1)
+  delta <- mean(fZ*hZ/gZ)
+  return(list(esti = delta, var = fZ*hZ/gZ))
+}
+
+
+v2 = var(esis(n)$var)
+library(microbenchmark) #library to have a compututional cos
+c = microbenchmark(esis(n))
+c2 = median(c$time[c$expr == "esis(n)"])
+
+R2 = v2*c2
+R2
+
+```
+
+```{r}
+
+v3 = var(escv(n)$var)
+library(microbenchmark) #library to have a compututional cos
+c = microbenchmark(esis(n))
+c3 = median(c$time[c$expr == "esis(n)"])
+
+R3 = v3*c3
+
+R3
+```
+
+```{r}
+R1/R2 # as R1/R2 > 1 then estimator two is better than estimator one 
+R2/R3 # as R2/R3 > 1 then estimator three is better than estimator two    
+```
