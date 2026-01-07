@@ -17,11 +17,12 @@ Implemented in **R**, with a strong focus on **theoretical justification**, **nu
 
 ## Repository content
 
-- `Code projet.Rmd`: full reproducible RMarkdown code (all implementations + figures/results)
-- `Consigne 1.pdf`, `Consigne 2.pdf`, `Consigne 3.pdf`: official project statements
-- `Partie 1.pdf`, `Partie 3.pdf`: written reports (math results + numerical experiments)
-- `TP/`: tutorials (TP) material and my personal corrections
+- `monte_carlo_quantile_mixture.Rmd`: fully reproducible RMarkdown file containing all Monte Carlo implementations, figures and numerical results
+- `assignment_part1.pdf`, `assignment_part2.pdf`, `assignment_part3.pdf`: official project statements released throughout the course
+- `report_part1.pdf`, `report_part2.pdf`, `report_part3.pdf`: written reports presenting theoretical derivations, mathematical results and numerical experiments
+- `tutorials/`: course tutorials (TP) with my personal implementations and corrections
+
 
 ## Reproducibility
 
-All experiments are reproducible from `Code projet.Rmd`. Random seeds are fixed within the code to reproduce the reported results.
+All experiments are reproducible from `monte_carlo_quantile_mixture.Rmd`. Random seeds are fixed within the code to reproduce the reported results.
