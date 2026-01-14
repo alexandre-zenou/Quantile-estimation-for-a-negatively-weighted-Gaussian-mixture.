@@ -26,3 +26,7 @@ Implemented in **R**, with a strong focus on **theoretical justification**, **nu
 ## Reproducibility
 
 All experiments are reproducible from `monte_carlo_quantile_mixture.Rmd`. Random seeds are fixed within the code to reproduce the reported results.
+
+Alexandre Zenou, Samuel Elbaz, Sasha Assouly
+
+Université Paris Dauphine
